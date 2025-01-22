@@ -5,11 +5,11 @@ from gymnasium.envs.registration import register
 
 register(
     id="GoRight-v0",
-    entry_point="goright.goright:GoRight",
+    entry_point="goright.env:GoRight",
 )
 
 register(
     id="GoRight10-v0",
-    entry_point="goright.goright:GoRight",
-    kwargs={"num_prize_indicators": 10}
+    entry_point="goright.env:GoRight",
+    kwargs={"num_prize_indicators": 10},
 )

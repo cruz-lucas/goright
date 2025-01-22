@@ -4,15 +4,14 @@ The environment is a 1D grid of configurable length. The agent can move left or 
 The status indicator transitions according to a second-order Markov chain, and the agent observes
 the prize indicators by reaching the rightmost grid position. When the agent reaches the last state
 with the status indicator at maximum intensity, the prize indicators go on and the agent receives the
-reward. 
+reward.
 """
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from gymnasium import Env, spaces
-
 from goright.utils import State
+from gymnasium import Env, spaces
 
 
 # Actions
@@ -153,7 +152,9 @@ class GoRight(Env):
                 -self.max_offset_status, self.max_offset_status
             )
             prize_offset = self.np_random.uniform(
-                -self.max_offset_prize, self.max_offset_prize, size=self.num_prize_indicators
+                -self.max_offset_prize,
+                self.max_offset_prize,
+                size=self.num_prize_indicators,
             )
             self.offset = np.concatenate(
                 [
@@ -168,7 +169,7 @@ class GoRight(Env):
             position=0,
             previous_status_indicator=self.np_random.choice(self.status_intensities),
             current_status_indicator=self.np_random.choice(self.status_intensities),
-            prize_indicators=np.zeros((self.num_prize_indicators)),
+            prize_indicators=np.zeros(self.num_prize_indicators),
             offset=self.offset,
         )
 
@@ -198,17 +199,16 @@ class GoRight(Env):
         if self.state is None:
             raise ValueError("State has not been initialized. Call reset() first.")
 
-        (
-            position,
-            previous_status,
-            current_status,
-            *prize_indicators
-        ) = self.state.get_state()
+        (position, previous_status, current_status, *prize_indicators) = (
+            self.state.get_state()
+        )
 
         prize_indicators = np.array(prize_indicators)
 
         next_pos = self._compute_next_position(action=action, position=position)
-        next_status = STATUS_TRANSITION.get((previous_status, current_status), 0)
+        next_status = self._compute_next_status(
+            previous_status=previous_status, current_status=current_status
+        )
         next_prize_indicators = self._compute_next_prize_indicators(
             next_position=next_pos,
             next_status=next_status,
@@ -243,6 +243,18 @@ class GoRight(Env):
         """
         direction = 1 if action == RIGHT else -1
         return int(np.clip(position + direction, 0, self.env_length - 1))
+
+    def _compute_next_status(self, previous_status: int, current_status: int) -> int:
+        """Computes the next status following the second-order markov dynamics.
+
+        Args:
+            previous_status (int): Previous status intensity.
+            current_status (int): Current status intensity.
+
+        Returns:
+            int: Next status intensity.
+        """
+        return STATUS_TRANSITION.get((previous_status, current_status), 0)
 
     def _compute_next_prize_indicators(
         self,
