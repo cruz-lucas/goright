@@ -60,7 +60,7 @@ You can install this environment using either **pip** or **uv** (a package manag
 Once installed, you can use the environment as follows:
 
 ```python
-import gym
+import gymnasium as gym
 import goright  # This import registers the environment
 
 env = gym.make("GoRight-v0")
