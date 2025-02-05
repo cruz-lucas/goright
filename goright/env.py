@@ -423,7 +423,7 @@ class GoRight(gym.Env):
             import pygame
         except ImportError as e:
             raise DependencyNotInstalled(
-                "pygame is not installed. Install via `pip install pygame`."
+                "pygame is not installed. Install via `pip install git+https://github.com/cruz-lucas/goright.git#egg=goright[extra]` if using pip, see README."
             ) from e
 
         if self.window is None:

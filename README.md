@@ -41,19 +41,37 @@ _(Image credit: Talvitie et al., 2024)_
 You can install this environment using either **pip** or **uv** (a package manager/distribution manager for Python).
 **Note**: If you're unfamiliar with `uv`, you can skip directly to the `pip` instructions.
 
-### 1. Installing via `uv`
+### 1. Using uv:
 
-   ```bash
-   uv add https://github.com/cruz-lucas/goright.git
-   ```
-   This should handle the necessary dependencies and set up the virtual environment if you have a `pyproject.toml` file, if not, see use `uv init`.
+  ```bash
+  uv add https://github.com/cruz-lucas/goright.git
+  ```
 
-### 2. Installing via `pip`
+   This should handle the necessary dependencies and set up the virtual environment if you have a `pyproject.toml` file, if not, see `uv init`.
 
-   ```bash
-   pip install git+https://github.com/cruz-lucas/goright.git
-   ```
-   This command installs the GoRight environment into your Python environment (**consider using a virtual environment**).
+### 2. Using pip:
+
+  ```bash
+  pip install git+https://github.com/cruz-lucas/goright.git
+  ```
+
+  This command installs the GoRight environment into your Python environment (**consider using a virtual environment**).
+
+### (Optional) Installation with Rendering Support
+
+If you need "human" rendering capabilities, install the package with the extra dependency. This installs pygame alongside the main package. Without `pygame`, you can still render the using using `render_mode=ansi`, see [play_goright.py](./goright/play_goright.py)
+
+### 1. Using uv:
+
+  ```bash
+  uv add 'https://github.com/cruz-lucas/goright.git#egg=goright[extra]'
+  ```
+
+### 2. Using pip:
+
+  ```bash
+  pip install "git+https://github.com/cruz-lucas/goright.git#egg=goright[extra]"
+  ```
 
 ## Usage
 
