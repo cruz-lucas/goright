@@ -9,9 +9,11 @@ reward.
 
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import gymnasium as gym
 import numpy as np
 from goright.utils import State
-from gymnasium import Env, spaces
+from gymnasium import spaces
+from gymnasium.error import DependencyNotInstalled
 
 
 # Actions
@@ -32,7 +34,7 @@ STATUS_TRANSITION = {
 }
 
 
-class GoRight(Env):
+class GoRight(gym.Env):
     """A custom Gymnasium environment for a simple 1D "Go Right" task.
 
     The agent is placed on a 1D grid of length `env_length`.
@@ -55,7 +57,10 @@ class GoRight(Env):
     Episodes never terminate by default (terminated=False, truncated=False) for each step.
     """
 
-    metadata = {"render_modes": ["human"]}
+    metadata = {
+        "render_modes": ["human", "ansi", "rgb_array"],
+        "render_fps": 4,
+    }
 
     def __init__(
         self,
@@ -64,6 +69,7 @@ class GoRight(Env):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = True,
         seed: Optional[int] = None,
+        render_mode: Optional[str] = None,
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -74,6 +80,7 @@ class GoRight(Env):
             has_state_offset (bool, optional): Whether to add random offsets to observations for
                 position/status/prize indicators.
             seed (Optional[int], optional): Seed for reproducibility.
+            render_mode (Optional[str], optional): Render mode.
         """
         super().__init__()
 
@@ -114,6 +121,13 @@ class GoRight(Env):
         )
 
         self.state: State
+        self.render_mode = render_mode
+
+        # For Pygame:
+        self.window = None
+        self.clock = None
+        self.window_size = (800, 300)
+        self.last_reward = 0.0
 
         if seed is not None:
             self.seed(seed)
@@ -143,6 +157,7 @@ class GoRight(Env):
                   info is an additional dictionary, empty by default.
         """
         super().reset(seed=seed)
+        self.last_reward = 0.0
 
         if self.has_state_offset:
             position_offset = self.np_random.uniform(
@@ -172,6 +187,9 @@ class GoRight(Env):
             prize_indicators=np.zeros(self.num_prize_indicators),
             offset=self.offset,
         )
+
+        if self.render_mode == "human":
+            self.render()
 
         return self.state.get_observation(), {}
 
@@ -221,6 +239,7 @@ class GoRight(Env):
             action=action,
             next_pos=next_pos,
         )
+        self.last_reward = reward
 
         self.state.set_state(
             position=next_pos,
@@ -228,6 +247,9 @@ class GoRight(Env):
             current_status_indicator=next_status,
             prize_indicators=next_prize_indicators,
         )
+
+        if self.render_mode == "human":
+            self.render()
 
         return self.state.get_observation(), reward, False, False, {}
 
@@ -333,3 +355,180 @@ class GoRight(Env):
         if action == LEFT:
             return 0.0
         return -1.0
+
+    def render(self) -> None:
+        """Renders the environment depending on self.render_mode.
+
+        - None: do nothing (warn user if they call render)
+        - "ansi": ASCII text
+        - "human": Pygame window
+        - "rgb_array": returns image array (also uses Pygame, but returns np array)
+        """
+        if self.render_mode is None:
+            if self.spec is not None:
+                gym.logger.warn(
+                    "You are calling render() without specifying any render_mode. "
+                    f'Use e.g. gym.make("{self.spec.id}", render_mode="human").'
+                )
+            return
+
+        if self.render_mode == "ansi":
+            return self._render_ascii()
+        elif self.render_mode in {"human", "rgb_array"}:
+            return self._render_pygame(self.render_mode)
+        else:
+            raise NotImplementedError(f"Render mode {self.render_mode} not supported.")
+
+    def _render_ascii(self) -> None:
+        """ASCII-based rendering that prints to console and returns a string."""
+        if self.state is None:
+            return "Environment not initialized."
+
+        position = self.state.position
+        prev_stat = self.state.previous_status_indicator
+        curr_stat = self.state.current_status_indicator
+        prizes = self.state.prize_indicators
+
+        cells = ["-"] * self.env_length
+        cells[position] = "A"
+        grid_str = "".join(cells)
+
+        out = (
+            "\n"
+            + "=" * 60
+            + f"\nGrid:           {grid_str}"
+            + f"\nPosition:       {position}"
+            + f"\nPrev Status:    {prev_stat}"
+            + f"\nCurr Status:    {curr_stat}"
+            + f"\nPrizes:         {prizes.tolist()}"
+            + f"\nLast Reward:    {self.last_reward}"
+            + "\n"
+            + "=" * 60
+            + "\n"
+        )
+        print(out)
+        return out
+
+    def _render_pygame(self, mode: str) -> Optional[np.ndarray]:
+        """Render via pygame in a more 'video game' style.
+
+        Args:
+            mode (str): Either 'human' (pygame window) or 'rgb_array' (returns image array).
+
+        Returns:
+            Optional[np.ndarray]: The RGB array if mode='rgb_array', else None.
+        """
+        # Lazy import pygame to keep it optional.
+        try:
+            import pygame
+        except ImportError as e:
+            raise DependencyNotInstalled(
+                "pygame is not installed. Install via `pip install pygame`."
+            ) from e
+
+        if self.window is None:
+            pygame.init()
+            if mode == "human":
+                pygame.display.init()
+                pygame.display.set_caption("GoRight-v0 (Video Game UI)")
+                self.window = pygame.display.set_mode(self.window_size)
+            else:
+                self.window = pygame.Surface(self.window_size)
+            self.clock = pygame.time.Clock()
+
+        assert self.window is not None
+        self.window.fill((180, 180, 180))
+
+        if self.state is not None:
+            position = self.state.position
+            prev_stat = self.state.previous_status_indicator
+            curr_stat = self.state.current_status_indicator
+            prizes = self.state.prize_indicators
+        else:
+            position = 0
+            prev_stat = 0
+            curr_stat = 0
+            prizes = np.zeros(self.num_prize_indicators)
+
+        self._draw_grid(position, pygame)
+
+        self._draw_ui_bar(position, prev_stat, curr_stat, prizes, pygame)
+
+        if mode == "human":
+            pygame.display.update()
+            self.clock.tick(self.metadata["render_fps"])
+            return None
+        else:  # mode == 'rgb_array'
+            return self._surface_to_array(self.window)
+
+    def _draw_grid(self, position: int, pygame_module) -> None:
+        """Draws a row of rectangles to represent the 1D grid.
+
+        Args:
+            position (int): Agent's position.
+            pygame_module (_type_): Pygame module.
+        """
+        cell_width = self.window_size[0] / self.env_length
+        cell_height = self.window_size[1] * 0.4  # 40% of window height
+        y_offset = self.window_size[1] - cell_height - 10
+
+        for i in range(self.env_length):
+            x = i * cell_width + 2
+            rect = pygame_module.Rect(x, y_offset, cell_width - 4, cell_height - 4)
+            color = (0, 128, 255) if i == position else (200, 200, 200)
+            pygame_module.draw.rect(self.window, color, rect)
+
+    def _draw_ui_bar(
+        self,
+        position: int,
+        prev_status: int,
+        curr_status: int,
+        prizes: np.ndarray,
+        pygame_module,
+    ) -> None:
+        """Draws a top bar with text about position, statuses, prizes, and reward.
+
+        Args:
+            position (int): Agent's position.
+            prev_status (int): Previous status intensity.
+            curr_status (int): Current status intensity.
+            prizes (np.ndarray): Prize indicators array.
+            pygame_module (_type_): Pygame module.
+        """
+        ui_bar_height = 60
+        ui_rect = pygame_module.Rect(0, 0, self.window_size[0], ui_bar_height)
+        pygame_module.draw.rect(self.window, (50, 50, 50), ui_rect)
+
+        font = pygame_module.font.SysFont("Arial", 22)
+
+        prize_str = "".join(["1" if p >= 0.5 else "0" for p in prizes])
+
+        info_line_1 = f"Position: {position}   Prev.Status: {prev_status}   Curr.Status: {curr_status}"
+        info_line_2 = f"Prizes: {prize_str}    Reward: {self.last_reward:.2f}"
+
+        text_color = (230, 230, 230)
+        line1_surf = font.render(info_line_1, True, text_color)
+        line2_surf = font.render(info_line_2, True, text_color)
+
+        self.window.blit(line1_surf, (10, 10))
+        self.window.blit(line2_surf, (10, 30))
+
+    @staticmethod
+    def _surface_to_array(surface) -> np.ndarray:
+        """Convert a pygame surface to a numpy array for 'rgb_array' rendering."""
+        import pygame.surfarray
+
+        arr = pygame.surfarray.array3d(surface)
+        # Pygame surfaces are (width, height), swap to (height, width, 3)
+        return np.transpose(arr, (1, 0, 2))
+
+    def close(self):
+        """Closes pygame window."""
+        if self.window is not None:
+            import pygame
+
+            pygame.display.quit()
+            pygame.quit()
+            self.window = None
+            self.clock = None
+        super().close()
