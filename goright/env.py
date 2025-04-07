@@ -7,7 +7,7 @@ with the status indicator at maximum intensity, the prize indicators go on and t
 reward.
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -68,6 +68,8 @@ class GoRight(gym.Env):
         env_length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = True,
+        show_status_ind: bool = True,
+        show_prev_status_ind: bool = False,
         seed: Optional[int] = None,
         render_mode: Optional[str] = None,
     ) -> None:
@@ -79,6 +81,8 @@ class GoRight(gym.Env):
             status_intensities (List[int], optional): Possible intensity values for the status indicator.
             has_state_offset (bool, optional): Whether to add random offsets to observations for
                 position/status/prize indicators.
+            show_status_ind (bool, optional): Flag to include the current status indicator in the observation. Defaults to True.
+            show_prev_status_ind (bool, optional): Flag to include the previous status indicator in the observation. Defaults to False.
             seed (Optional[int], optional): Seed for reproducibility.
             render_mode (Optional[str], optional): Render mode.
         """
@@ -91,34 +95,69 @@ class GoRight(gym.Env):
         self.max_intensity = max(status_intensities)
         self.has_state_offset = has_state_offset
         self.intensity_to_idx = {val: i for i, val in enumerate(status_intensities)}
+        self.show_status_ind = show_status_ind
+        self.show_prev_status_ind = show_prev_status_ind
 
         self.max_offset_pos = 0.25
         self.max_offset_status = 1.25
         self.max_offset_prize = 0.25
 
         self.action_space = spaces.Discrete(2)
-        self.observation_space = spaces.Dict(
-            {
-                "position": spaces.Box(
-                    low=-self.max_offset_pos,
-                    high=env_length - 1 + self.max_offset_pos,
-                    shape=(1,),
-                    dtype=np.float32,
-                ),
-                "status_indicator": spaces.Box(
-                    low=-self.max_offset_status,
-                    high=self.max_intensity + self.max_offset_status,
-                    shape=(1,),
-                    dtype=np.float32,
-                ),
-                "prize_indicators": spaces.Box(
-                    low=-self.max_offset_prize,
-                    high=1.0 + self.max_offset_prize,
-                    shape=(self.num_prize_indicators,),
-                    dtype=np.float32,
-                ),
-            }
+
+        position_box = spaces.Box(
+            low=-self.max_offset_pos,
+            high=env_length - 1 + self.max_offset_pos,
+            shape=(1,),
+            dtype=np.float32,
         )
+        status_box = spaces.Box(
+            low=-self.max_offset_status,
+            high=self.max_intensity + self.max_offset_status,
+            shape=(1,),
+            dtype=np.float32,
+        )
+        prize_box = spaces.Box(
+            low=-self.max_offset_prize,
+            high=1.0 + self.max_offset_prize,
+            shape=(self.num_prize_indicators,),
+            dtype=np.float32,
+        )
+
+        if show_status_ind:
+            if show_prev_status_ind:
+                self.observation_space = spaces.Dict(
+                    {
+                        "position": position_box,
+                        "prev_status_indicator": status_box,
+                        "status_indicator": status_box,
+                        "prize_indicators": prize_box,
+                    }
+                )
+            else:
+                self.observation_space = spaces.Dict(
+                    {
+                        "position": position_box,
+                        "status_indicator": status_box,
+                        "prize_indicators": prize_box,
+                    }
+                )
+
+        else:
+            if show_prev_status_ind:
+                self.observation_space = spaces.Dict(
+                    {
+                        "position": position_box,
+                        "prev_status_indicator": status_box,
+                        "prize_indicators": prize_box,
+                    }
+                )
+            else:
+                self.observation_space = spaces.Dict(
+                    {
+                        "position": position_box,
+                        "prize_indicators": prize_box,
+                    }
+                )
 
         self.state: State
         self.render_mode = render_mode
@@ -142,7 +181,7 @@ class GoRight(gym.Env):
 
     def reset(
         self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
-    ) -> Tuple[Dict[str, Union[np.float32, np.ndarray]], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
         """Resets the environment to its initial state.
 
         Args:
@@ -150,7 +189,7 @@ class GoRight(gym.Env):
             options (Optional[Dict[str, Any]], optional): Additional options (unused).
 
         Returns:
-            Tuple[Dict[str, Union[np.float32, np.ndarray]], Dict[str, Any]]:
+            Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
                 A tuple (observation, info) where:
                   observation is a dict with "position", "status_indicator",
                   and "prize_indicators".
@@ -186,6 +225,8 @@ class GoRight(gym.Env):
             current_status_indicator=self.np_random.choice(self.status_intensities),
             prize_indicators=np.zeros(self.num_prize_indicators),
             offset=self.offset,
+            show_status_ind=self.show_status_ind,
+            show_prev_status_ind=self.show_prev_status_ind,
         )
 
         if self.render_mode == "human":
@@ -195,9 +236,7 @@ class GoRight(gym.Env):
 
     def step(
         self, action: int
-    ) -> Tuple[
-        Dict[str, Union[np.float32, np.ndarray]], float, bool, bool, Dict[str, Any]
-    ]:
+    ) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
         """Runs one timestep of the environment's dynamics.
 
         The agent takes an action (0=LEFT, 1=RIGHT), which updates the position and
@@ -207,7 +246,7 @@ class GoRight(gym.Env):
             action (int): The action taken by the agent: 0 (LEFT) or 1 (RIGHT).
 
         Returns:
-            observation (Dict[str, Union[np.float32, np.ndarray]]):
+            observation (Dict[str, np.ndarray]):
                 Updated observation after the step.
             reward (float): Immediate reward from this step.
             terminated (bool): Whether this episode has ended (False by default here).
@@ -356,7 +395,7 @@ class GoRight(gym.Env):
             return 0.0
         return -1.0
 
-    def render(self) -> None:
+    def render(self) -> None | str | np.ndarray:
         """Renders the environment depending on self.render_mode.
 
         - None: do nothing (warn user if they call render)
@@ -379,7 +418,7 @@ class GoRight(gym.Env):
         else:
             raise NotImplementedError(f"Render mode {self.render_mode} not supported.")
 
-    def _render_ascii(self) -> None:
+    def _render_ascii(self) -> None | str:
         """ASCII-based rendering that prints to console and returns a string."""
         if self.state is None:
             return "Environment not initialized."
