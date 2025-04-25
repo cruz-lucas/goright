@@ -552,6 +552,69 @@ class GoRight(gym.Env):
         self.window.blit(line1_surf, (10, 10))
         self.window.blit(line2_surf, (10, 30))
 
+    def render_with_bbox(
+        self,
+        agent_position: int,
+        low_position: int,
+        high_position: int,
+        predicted_position: int,
+        mode: str = "human",
+    ) -> None:
+        """Render the grid with overlays for planning range and predicted state.
+
+        Args:
+            agent_position (int): The actual agent position (blue).
+            low_position (int): Lower bound of planned range.
+            high_position (int): Upper bound of planned range.
+            predicted_position (int): Predicted position.
+            mode (str): Render mode: "human".
+        """
+        import pygame
+
+        if self.window is None:
+            self._render_pygame(mode)
+        assert self.window is not None
+
+        # Clear base frame
+        self.window.fill((180, 180, 180))
+        self._draw_ui_bar(
+            self.state.position,
+            self.state.previous_status_indicator,
+            self.state.current_status_indicator,
+            self.state.prize_indicators,
+            pygame,
+        )
+
+        # Draw grid
+        cell_width = self.window_size[0] / self.env_length
+        cell_height = self.window_size[1] * 0.4
+        y_offset = self.window_size[1] - cell_height - 10
+
+        for i in range(self.env_length):
+            x = i * cell_width + 2
+            rect = pygame.Rect(x, y_offset, cell_width - 4, cell_height - 4)
+
+            if i == agent_position:
+                pygame.draw.rect(self.window, (0, 128, 255), rect)
+            else:
+                pygame.draw.rect(self.window, (200, 200, 200), rect)
+
+        for i in range(self.env_length):
+            x = i * cell_width + 2
+
+            if low_position <= i <= high_position:
+                rect = pygame.Rect(x, y_offset - 25, cell_width - 4, 15)
+                color = (255, 255, 0)  # yellow box range
+                pygame.draw.rect(self.window, color, rect)
+
+        # Predicted (red), slightly above
+        x = predicted_position * cell_width + 2
+        rect = pygame.Rect(x, y_offset - 50, cell_width - 4, 15)
+        pygame.draw.rect(self.window, (255, 0, 0), rect)
+
+        pygame.display.update()
+        self.clock.tick(self.metadata["render_fps"])
+
     @staticmethod
     def _surface_to_array(surface) -> np.ndarray:
         """Convert a pygame surface to a numpy array for 'rgb_array' rendering."""
