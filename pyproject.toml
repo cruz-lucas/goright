@@ -7,15 +7,16 @@ name = "goright"
 version = "0.1.0"
 description = "An implementation of the GoRight environment for RL agents."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Lucas Cruz", email = "lucas@lucas-cruz.com" }]
 license = { text = "MIT License" }
 dependencies = [
+    "flax>=0.12.0",
     "gymnasium>=1.0.0",
     "ipykernel>=6.29.5",
+    "jax>=0.6.0",
     "matplotlib>=3.10.0",
     "numpy>=2.2.1",
-    "pre-commit>=4.0.1",
 ]
 
 [project.optional-dependencies]
@@ -35,15 +36,23 @@ lines_after_imports = 2
 multi_line_output = 3
 
 [tool.pyright]
-include = ["gymnasium/**"]
+include = ["goright/**"]
 exclude = ["tests/**", "**/node_modules", "**/__pycache__"]
 strict = []
 
 typeCheckingMode = "basic"
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 pythonPlatform = "All"
 typeshedPath = "typeshed"
 enableTypeIgnoreComments = true
 
 [tool.pytest.ini_options]
 filterwarnings = ["ignore::DeprecationWarning:gymnasium.*:"]
+
+[tool.uv.sources]
+gymnasium = { git = "https://github.com/cruz-lucas/Gymnasium.git" }
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.1",
+]
